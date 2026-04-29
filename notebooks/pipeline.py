@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.utils import resample
 
 # Load files
 chart = pd.read_csv('mimic-iii-clinical-db/raw/CHARTEVENTS.csv', low_memory=False)
@@ -72,10 +73,8 @@ valid_dob_mask = adm['dob'] > (adm['admittime'] - pd.Timedelta(days=365*150))
 
 adm.loc[~valid_dob_mask, 'dob'] = pd.NaT
 
-# Now safe to subtract
 age_days = (adm['admittime'] - adm['dob']).dt.days
-
-# Convert to years safely
+# Convert to years 
 adm['age'] = (age_days / 365).clip(0, 100)
 
 # Fill missing (invalid DOBs → treated as elderly)
@@ -152,10 +151,49 @@ df['shock_index'] = df['heart_rate'] / df['systolic_bp'].replace(0, np.nan)
 df = df.dropna(subset=['heart_rate', 'systolic_bp', 'spo2'])
 df['los_hours'] = pd.to_numeric(df['los_hours'], errors='coerce').round(2)
 
-print(f"\nFinal dataset: {df.shape}")
-print(df['esi_level'].value_counts().sort_index())
-print(df.head())
+# ── 8. DATA AUGMENTATION ──────────────────────────────────
+def augment_data(df, factor=5):
+    numeric_cols = [
+        'heart_rate', 'systolic_bp', 'diastolic_bp',
+        'resp_rate', 'spo2', 'temperature',
+        'age', 'shock_index'
+    ]
 
-# Save
-df.to_csv('mimic-iii-clinical-db/mimic-iii-processed_dataset.csv', index=False)
+    augmented = []
+
+    for _ in range(factor):
+        noisy = df.copy()
+
+        for col in numeric_cols:
+            if col in noisy.columns:
+                std = noisy[col].std() * 0.05  # 5% noise
+                noisy[col] = (noisy[col] +
+                               np.random.normal(0, std, len(noisy))).round(2)
+
+        augmented.append(noisy)
+
+    return pd.concat([df] + augmented, ignore_index=True)
+
+
+df_augmented = augment_data(df, factor=5)
+
+# Recompute shock index after augmentation
+df_augmented['shock_index'] = (
+    df_augmented['heart_rate'] /
+    df_augmented['systolic_bp'].replace(0, np.nan)
+)
+
+# ── REORDER COLUMNS (move target to end) ──────────────────
+cols = [c for c in df_augmented.columns if c != 'esi_level'] + ['esi_level']
+df_augmented = df_augmented[cols]
+
+print(f"\nAugmented dataset: {df_augmented.shape}")
+print(df_augmented['esi_level'].value_counts().sort_index())
+print(df_augmented.head())
+
+df_augmented.to_csv(
+    'mimic-iii-clinical-db/mimic-iii-processed_dataset.csv',
+    index=False
+)
+
 print("\nSaved to mimic-iii-clinical-db/mimic-iii-processed_dataset.csv")
