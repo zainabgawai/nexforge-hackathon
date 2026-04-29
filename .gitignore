@@ -1,0 +1,29 @@
+# MIMIC-III data — never commit, even the demo
+mimic-iii-clinical-db/
+data/processed/*
+!data/processed/.gitkeep
+
+# Models
+models/*.pkl
+models/*.joblib
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Env
+.env
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
