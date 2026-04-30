@@ -115,7 +115,7 @@ def encode_complaint(text):
         return 3
     elif any(w in text for w in ['neuro', 'stroke', 'altered', 'seizure', 'syncope', 'tia']):    
         return 4
-    elif any(w in text for w in ['abdom', 'gi', 'bowel', 'liver', 'bleed', 'hepat']):         # added
+    elif any(w in text for w in ['abdom', 'gi', 'bowel', 'liver', 'bleed', 'hepat']):      
         return 5
     else:
         return 0
@@ -189,9 +189,64 @@ df_augmented = df_augmented[cols]
 
 print(f"\nAugmented dataset: {df_augmented.shape}")
 print(df_augmented['esi_level'].value_counts().sort_index())
-print(df_augmented.head())
 
-df_augmented.to_csv(
+# ── 9. ADD SYNTHETIC ESI 5 PATIENTS ───────────────────────
+def generate_esi5(n=60):
+    np.random.seed(42)
+    return pd.DataFrame({
+        'subject_id':            np.zeros(n, dtype=int),
+        'hadm_id':               np.zeros(n, dtype=int),
+        'heart_rate':            np.random.normal(75, 8, n).clip(60, 95).round(1),
+        'systolic_bp':           np.random.normal(118, 10, n).clip(100, 135).round(1),
+        'diastolic_bp':          np.random.normal(75, 8, n).clip(60, 90).round(1),
+        'resp_rate':             np.random.normal(14, 2, n).clip(10, 18).round(1),
+        'spo2':                  np.random.normal(99, 0.5, n).clip(97, 100).round(1),
+        'temperature':           np.random.normal(98.2, 0.4, n).clip(97, 99.5).round(1),
+        'age':                   np.random.randint(18, 65, n),
+        'gender_m':              np.random.randint(0, 2, n),
+        'los_hours':             np.random.uniform(2, 10, n).round(2),
+        'hospital_expire_flag':  np.zeros(n, dtype=int),
+        'has_diabetes':          np.zeros(n, dtype=int),
+        'has_hypertension':      np.zeros(n, dtype=int),
+        'has_heart_disease':     np.zeros(n, dtype=int),
+        'has_sepsis':            np.zeros(n, dtype=int),
+        'has_resp_failure':      np.zeros(n, dtype=int),
+        'complaint_cat':         np.random.choice([0, 1, 2, 3, 4, 5], n),
+        'esi_level':             np.full(n, 5),
+    })
+
+esi5 = generate_esi5(60)
+esi5['shock_index'] = esi5['heart_rate'] / esi5['systolic_bp']
+
+# Match column order before concat
+esi5 = esi5[df_augmented.columns]
+
+df_augmented = pd.concat([df_augmented, esi5], ignore_index=True)
+
+# ── 10. BALANCE CLASSES ────────────────────────────────────
+target_count = 150  # target per class
+
+balanced_dfs = []
+for level in [1, 2, 3, 4, 5]:
+    subset = df_augmented[df_augmented['esi_level'] == level]
+    if len(subset) < target_count:
+        subset = resample(subset, replace=True,
+                          n_samples=target_count, random_state=42)
+    else:
+        subset = resample(subset, replace=False,
+                          n_samples=target_count, random_state=42)
+    balanced_dfs.append(subset)
+
+df_final = (
+    pd.concat(balanced_dfs, ignore_index=True)
+    .sample(frac=1, random_state=42)
+    .reset_index(drop=True)
+)
+
+print(f"\nFinal balanced dataset: {df_final.shape}")
+print(df_final['esi_level'].value_counts().sort_index())
+
+df_final.to_csv(
     'mimic-iii-clinical-db/mimic-iii-processed_dataset.csv',
     index=False
 )
