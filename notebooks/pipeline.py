@@ -111,11 +111,11 @@ def encode_complaint(text):
         return 1
     elif any(w in text for w in ['sepsis', 'infection', 'fever', 'pneumonia']):
         return 2
-    elif any(w in text for w in ['breath', 'respiratory', 'copd', 'asthma']):
+    elif any(w in text for w in ['breath', 'respiratory', 'copd', 'asthma', 'shortness', 'dyspnea']):  
         return 3
-    elif any(w in text for w in ['neuro', 'stroke', 'altered', 'seizure']):
+    elif any(w in text for w in ['neuro', 'stroke', 'altered', 'seizure', 'syncope', 'tia']):    
         return 4
-    elif any(w in text for w in ['abdom', 'gi', 'bowel', 'liver']):
+    elif any(w in text for w in ['abdom', 'gi', 'bowel', 'liver', 'bleed', 'hepat']):         # added
         return 5
     else:
         return 0
