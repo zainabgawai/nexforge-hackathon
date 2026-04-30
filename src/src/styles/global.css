@@ -1,0 +1,89 @@
+/* ── RESET & ROOT ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Palette — dark clinical */
+  --bg:        #080c10;
+  --bg2:       #0d1318;
+  --bg3:       #121920;
+  --bg4:       #1a242d;
+  --bg5:       #1f2c38;
+  --border:    #1e2d3a;
+  --border2:   #263545;
+
+  --tx:        #ddeaf5;
+  --tx2:       #7a9ab5;
+  --tx3:       #3d5a72;
+  --tx4:       #1e3346;
+
+  /* ESI colours */
+  --esi1:      #ff3b3b;
+  --esi1bg:    rgba(255,59,59,0.10);
+  --esi1border:rgba(255,59,59,0.30);
+
+  --esi2:      #ff7a1a;
+  --esi2bg:    rgba(255,122,26,0.10);
+  --esi2border:rgba(255,122,26,0.30);
+
+  --esi3:      #f5c842;
+  --esi3bg:    rgba(245,200,66,0.10);
+  --esi3border:rgba(245,200,66,0.30);
+
+  --esi4:      #3ecf8e;
+  --esi4bg:    rgba(62,207,142,0.10);
+  --esi4border:rgba(62,207,142,0.30);
+
+  --esi5:      #5ba3cc;
+  --esi5bg:    rgba(91,163,204,0.10);
+  --esi5border:rgba(91,163,204,0.30);
+
+  /* Accent */
+  --blue:      #4fa3d4;
+  --blue-dim:  rgba(79,163,212,0.12);
+  --green:     #3ecf8e;
+  --red:       #ff3b3b;
+  --amber:     #f5c842;
+
+  /* Typography */
+  --ff-sans:  'DM Sans', sans-serif;
+  --ff-mono:  'DM Mono', 'Space Mono', monospace;
+  --ff-head:  'Space Mono', monospace;
+
+  /* Spacing */
+  --r:  6px;
+  --r2: 10px;
+  --r3: 14px;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: var(--ff-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* input reset */
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button { -webkit-appearance: none; }
+input[type=number] { -moz-appearance: textfield; }
+
+/* utilities */
+.mono { font-family: var(--ff-mono); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
