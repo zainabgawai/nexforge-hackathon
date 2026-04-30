@@ -1,0 +1,33 @@
+
+MODEL EVALUATION REPORT
+=======================
+Dataset      : mimic-iii-processed_dataset.csv
+Model        : XGBoost (n_estimators=300, max_depth=5, lr=0.05)
+Train size   : 600
+Test size    : 150
+Features     : 15
+
+Test Set Performance
+--------------------
+Weighted F1  : 1.0000
+Macro F1     : 1.0000
+
+Cross-Validation (5-fold)
+--------------------------
+CV Scores    : [0.9933 0.9799 0.9933 1.     1.    ]
+Mean CV F1   : 0.9933 ± 0.0073
+
+Classification Report
+----------------------
+              precision    recall  f1-score   support
+
+       ESI-1       1.00      1.00      1.00        30
+       ESI-2       1.00      1.00      1.00        30
+       ESI-3       1.00      1.00      1.00        30
+       ESI-4       1.00      1.00      1.00        30
+       ESI-5       1.00      1.00      1.00        30
+
+    accuracy                           1.00       150
+   macro avg       1.00      1.00      1.00       150
+weighted avg       1.00      1.00      1.00       150
+
