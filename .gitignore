@@ -4,7 +4,6 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Models
-models/*.pkl
 models/*.joblib
 
 # Python
