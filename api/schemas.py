@@ -9,7 +9,7 @@ class Vitals(BaseModel):
     diastolic_bp:  Optional[float] = Field(None, ge=0, le=200, description="mmHg")
     resp_rate:     Optional[float] = Field(None, ge=0, le=80,  description="breaths/min")
     spo2:          Optional[float] = Field(None, ge=0, le=100, description="%")
-    temperature:   Optional[float] = Field(None, ge=25, le=45, description="Fahrenheit")
+    temperature:   Optional[float] = Field(None, ge=80, le=115, description="Fahrenheit")
 
 
 class Comorbidities(BaseModel):
@@ -29,6 +29,8 @@ class TriageRequest(BaseModel):
 
 
 class TriageResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}   # allow `model_version` field name
+
     esi_level:     int    = Field(..., ge=1, le=5, description="1=resuscitation, 5=non-urgent")
     confidence:    float  = Field(..., ge=0, le=1)
     top_risk_factors: list[str] = Field(
