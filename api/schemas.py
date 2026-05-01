@@ -1,4 +1,5 @@
 """Request / response schemas for the triage API."""
+from datetime import datetime
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
@@ -38,3 +39,58 @@ class TriageResponse(BaseModel):
         description="Top 3 SHAP-derived reasons for this score"
     )
     model_version: str
+
+
+# ─── Queue ──────────────────────────────────────────────────────────────
+
+class QueueEntry(BaseModel):
+    patient_id:       str
+    arrival_time:     datetime
+    waiting_minutes:  int               = Field(..., ge=0, description="recomputed each request")
+    esi_level:        int               = Field(..., ge=1, le=5)
+    confidence:       float             = Field(..., ge=0, le=1)
+    age:              float
+    gender:           Literal["M", "F"]
+    complaint_cat:    int               = Field(..., ge=0, le=5)
+    complaint_label:  str
+    top_risk_factors: list[str]         = Field(default_factory=list)
+
+
+class QueueResponse(BaseModel):
+    count:         int
+    last_updated:  datetime
+    patients:      list[QueueEntry]
+
+
+# ─── Beds ───────────────────────────────────────────────────────────────
+
+BedStatusLiteral = Literal["available", "occupied", "cleaning"]
+
+
+class BedStatus(BaseModel):
+    bed_id:      str
+    category:    str           = Field(..., description="resuscitation, trauma, monitored, general, fast_track")
+    status:      BedStatusLiteral
+    patient_id:  Optional[str] = None
+    since:       Optional[datetime] = Field(None, description="when current status started")
+
+
+class BedCategorySummary(BaseModel):
+    total:      int
+    available:  int
+    occupied:   int
+    cleaning:   int
+
+
+class BedsSummary(BaseModel):
+    total:        int
+    available:    int
+    occupied:     int
+    cleaning:     int
+    by_category:  dict[str, BedCategorySummary]
+
+
+class BedsResponse(BaseModel):
+    last_updated:  datetime
+    summary:       BedsSummary
+    beds:          list[BedStatus]
