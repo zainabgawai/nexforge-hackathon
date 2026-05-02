@@ -51,15 +51,18 @@ from api.schemas import (
 # ─── Model artifact loading ─────────────────────────────────────────────
 
 MODELS_DIR    = Path(__file__).resolve().parent.parent / "models"
-MODEL_VERSION = "xgb-v5.0.0"
+MODEL_VERSION = "xgb-binary-1.0.0"
 
-with open(MODELS_DIR / "triage_model.pkl", "rb") as f:
-    MODEL = pickle.load(f)                          # CalibratedClassifierCV
+# ── BINARY MODEL (train_model_v6) ──
+# The classifier predicts {0=non_critical (ESI 3-5), 1=critical (ESI 1-2)}.
+# Granular ESI 1-5 is produced downstream by _apply_clinical_override().
+with open(MODELS_DIR / "triage_model_binary.pkl", "rb") as f:
+    MODEL = pickle.load(f)                          # CalibratedClassifierCV (binary)
 
-with open(MODELS_DIR / "feature_names.pkl", "rb") as f:
+with open(MODELS_DIR / "feature_names_binary.pkl", "rb") as f:
     FEATURE_NAMES: list[str] = pickle.load(f)       # ordered list used at training time
 
-with open(MODELS_DIR / "real_median.pkl", "rb") as f:
+with open(MODELS_DIR / "real_median_binary.pkl", "rb") as f:
     _real_median_dict: dict = pickle.load(f)        # for NaN imputation at inference
 REAL_MEDIAN = pd.Series(_real_median_dict)
 
@@ -417,17 +420,55 @@ def _clinical_fallback(clinical_output: dict, esi_level: int,
 
 # ─── Full prediction (mirrors explain_prediction in train_model_v5) ──────
 
+def _refine_non_critical_esi(features: dict) -> int:
+    """
+    For non-critical patients (model predicted ESI 3-5), assign a specific
+    ESI based on simple rule-based heuristics so the queue shows variety.
+    The model itself only decides critical/non-critical; this fans out to 3/4/5.
+    """
+    age   = features.get("age", 50)
+    hr    = features.get("heart_rate",   80)
+    sbp   = features.get("systolic_bp", 120)
+    spo2  = features.get("spo2",         98)
+    has_comorbidity = bool(
+        features.get("has_diabetes", 0)
+        or features.get("has_hypertension", 0)
+        or features.get("has_heart_disease", 0)
+    )
+    vitals_borderline = (
+        hr > 100 or hr < 60
+        or sbp < 110 or sbp > 160
+        or spo2 < 95
+    )
+    if vitals_borderline or (age > 65 and has_comorbidity):
+        return 3   # urgent — needs monitoring
+    if age < 40 and not has_comorbidity:
+        return 5   # non-urgent — fast track candidate
+    return 4       # less urgent — middle ground
+
+
 def _predict(req: TriageRequest) -> dict:
     features = _request_to_features(req)
 
     # Build DataFrame in exact column order the model expects
     X = pd.DataFrame([features])[FEATURE_NAMES].fillna(REAL_MEDIAN).astype(np.float32)
 
-    # Model prediction
-    proba       = MODEL.predict_proba(X)[0]
-    model_class = int(np.argmax(proba))
-    model_esi   = model_class + 1
-    raw_conf    = float(proba[model_class])
+    # ── Binary model prediction ──
+    # proba shape: [p_non_critical, p_critical]
+    proba          = MODEL.predict_proba(X)[0]
+    non_crit_prob  = float(proba[0])
+    critical_prob  = float(proba[1])
+    model_critical = critical_prob >= 0.5
+
+    # Map binary decision → baseline ESI 1-5 for the override layer.
+    # Critical → ESI 2 baseline; override may force ESI 1 on severe vitals.
+    # Non-critical → fan out to 3/4/5 based on age + vitals + comorbidities.
+    if model_critical:
+        model_esi = 2
+        raw_conf  = critical_prob
+    else:
+        model_esi = _refine_non_critical_esi(features)
+        raw_conf  = non_crit_prob
 
     # Clinical signal engine (independent of model)
     clinical_output = _clinical_signal_engine(features)
@@ -479,8 +520,23 @@ def _predict(req: TriageRequest) -> dict:
         "clinical_signals":        clinical_output["signals"],
         "critical_flags":          clinical_output["critical_flags"],
         "context_flags":           clinical_output["context_flags"],
-        "all_probabilities":       {f"ESI-{i+1}": round(float(p), 4)
-                                    for i, p in enumerate(proba)},
+        # Truth from the binary model
+        "model_critical":          model_critical,
+        "critical_probability":    round(critical_prob, 4),
+        "binary_probabilities": {
+            "critical":     round(critical_prob, 4),
+            "non_critical": round(non_crit_prob, 4),
+        },
+        # 5-class shape for frontend backward compatibility — synthesized,
+        # NOT from the model. Mass concentrates on {ESI-2, ESI-3} mirroring
+        # the binary split; final ESI is decided by the override layer above.
+        "all_probabilities": {
+            "ESI-1": round(0.15 * critical_prob, 4),
+            "ESI-2": round(0.85 * critical_prob, 4),
+            "ESI-3": round(0.70 * non_crit_prob, 4),
+            "ESI-4": round(0.20 * non_crit_prob, 4),
+            "ESI-5": round(0.10 * non_crit_prob, 4),
+        },
     }
 
 
@@ -700,6 +756,8 @@ def triage(req: TriageRequest) -> TriageResponse:
         return TriageResponse(
             esi_level=result["esi_level"],
             model_esi=result["model_esi"],
+            model_critical=result["model_critical"],
+            critical_probability=result["critical_probability"],
             confidence=round(result["confidence"], 4),
             override_applied=result["override_applied"],
             override_reason=result["override_reason"],
@@ -712,6 +770,7 @@ def triage(req: TriageRequest) -> TriageResponse:
             clinical_signals=[ClinicalSignal(**s) for s in result["clinical_signals"]],
             critical_flags=result["critical_flags"],
             context_flags=result["context_flags"],
+            binary_probabilities=result["binary_probabilities"],
             all_probabilities=result["all_probabilities"],
             model_version=MODEL_VERSION,
         )

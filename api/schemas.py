@@ -44,17 +44,26 @@ class ClinicalSignal(BaseModel):
     clinical_note: str = Field("",  description="One-line clinical interpretation")
 
 class TriageResponse(BaseModel):
-    model_config = {"protected_namespaces": ()}  
+    model_config = {"protected_namespaces": ()}
 
     # ── Core output ──────────────────────────────────────────
     esi_level:  int   = Field(..., ge=1, le=5,
                               description="Final ESI level (1=resuscitation … 5=non-urgent). "
                                           "May differ from model_esi when a clinical override fires.")
     model_esi:  int   = Field(..., ge=1, le=5,
-                              description="Raw XGBoost prediction before any clinical override.")
+                              description="Baseline ESI inferred from the binary model "
+                                          "(critical→2; non-critical fans out to 3/4/5 by rules) "
+                                          "before any clinical override.")
     confidence: float = Field(..., ge=0, le=1,
                               description="Calibrated probability of the assigned class. "
                                           "Fixed at 0.95 when a clinical override is applied.")
+
+    # ── Binary classifier output (the model's actual decision) ─
+    model_critical:       bool  = Field(...,
+        description="Binary model decision: True = critical (ESI 1-2), False = non-critical (ESI 3-5).")
+    critical_probability: float = Field(..., ge=0, le=1,
+        description="Calibrated probability the patient is critical. "
+                    "Use this for triage thresholds — it's the trustworthy signal from the model.")
 
     # ── Clinical override layer ───────────────────────────────
     override_applied: bool          = Field(...,
@@ -87,9 +96,15 @@ class TriageResponse(BaseModel):
     context_flags:    list[str]            = Field(default_factory=list,
         description="Comorbidity / demographic risk factors.")
 
-    # ── Full probability breakdown ────────────────────────────
+    # ── Probability breakdown ─────────────────────────────────
+    binary_probabilities: dict[str, float] = Field(default_factory=dict,
+        description="Calibrated binary probabilities, e.g. {'critical': 0.78, 'non_critical': 0.22}. "
+                    "This is the truth from the model.")
     all_probabilities: dict[str, float] = Field(default_factory=dict,
-        description="Calibrated probability per ESI class, e.g. {'ESI-1': 0.03, 'ESI-2': 0.71, ...}")
+        description="Synthesized 5-class probability distribution for frontend backward compatibility, "
+                    "e.g. {'ESI-1': 0.12, 'ESI-2': 0.66, 'ESI-3': 0.15, 'ESI-4': 0.04, 'ESI-5': 0.02}. "
+                    "Mass concentrates on ESI-2/ESI-3 mirroring the binary split. "
+                    "NOT the raw model output — final ESI is decided by override rules.")
 
     model_version: str
 
@@ -97,6 +112,8 @@ class TriageResponse(BaseModel):
 # ─── Queue ──────────────────────────────────────────────────────────────
 
 class QueueEntry(BaseModel):
+    model_config = {"protected_namespaces": ()}   # allow `model_esi` field name
+
     patient_id:            str
     arrival_time:          datetime
     waiting_minutes:       int             = Field(..., ge=0)
