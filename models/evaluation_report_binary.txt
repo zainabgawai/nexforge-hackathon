@@ -1,0 +1,30 @@
+
+MODEL EVALUATION REPORT (BINARY)
+==================================
+Classifier task : critical (ESI 1-2) vs non-critical (ESI 3-5)
+Features used   : 20
+
+Test Performance (subject-isolated, real MIMIC)
+-----------------------------------------------
+Weighted F1                : 0.6111
+Macro F1                   : 0.5556
+Critical (ESI 1-2) Recall  : 0.5556   ← safety-critical
+Non-critical Recall        : 0.6667
+
+Test class counts:
+  non_critical  : 3
+  critical      : 9
+
+StratifiedGroupKFold CV (5 folds, subject_id groups)
+----------------------------------------------------
+CV F1 scores    : [0.7563 0.5023 0.6639 0.7368 0.7213]
+Mean CV F1      : 0.6761 ± 0.0922
+CV crit recall  : 0.7267
+
+Note
+----
+This model produces a binary "is this patient critical?" decision.
+Granular ESI 1-5 levels for the API response come from the clinical
+override layer in api/main.py based on vital-sign rules, not from this
+classifier. The override layer also catches dangerous cases the model
+misses (severe hypoxia, hypotension, etc.) regardless of model output.
