@@ -1,24 +1,6 @@
 """
-train_model_v6.py — Binary critical-vs-non-critical classifier
+train_model.py — Binary critical-vs-non-critical classifier
 ================================================================
-
-WHY BINARY (changes vs train_model_v5)
---------------------------------------
-The MIMIC demo distribution is 4 / 43 / 20 / 3 / 0 patients across ESI 1-5.
-After subject-isolated split, ESI-1 has 3 train patients, ESI-4 has 2, and
-ESI-5 has zero real patients. No multi-class model can honestly learn from
-that — augmentation just makes copies that the model memorizes, which is
-why train_model_v5 collapses to predicting ESI-2 for everything (87.5%
-recall on ESI-2, 0% on every other class).
-
-The fix is to reframe the task: the model decides ONLY "is this patient
-critical?" (ESI 1-2 vs ESI 3-5). Real distribution becomes 47 critical /
-23 non-critical, which is feasible for honest training.
-
-The granular ESI 1-5 score is then produced downstream by the clinical
-override layer in api/main.py based on vital-sign rules — not by the model.
-This matches how real clinical decision-support systems work: ML provides
-a prior, rules provide the safety floor.
 
 INPUTS  (run pipeline_v3.py first to produce these)
   mimic-iii-clinical-db/mimic-iii-train.csv
@@ -58,7 +40,7 @@ Path("models").mkdir(exist_ok=True)
 Path("reports").mkdir(exist_ok=True)
 
 
-# ─── FEATURES (identical set to train_model_v5) ─────────────────────────
+# ─── FEATURES  ──────────────────────────────────────────────────────────
 BASE_FEATURES = [
     "heart_rate", "systolic_bp", "diastolic_bp",
     "resp_rate", "spo2", "temperature",
@@ -192,7 +174,7 @@ print("Confusion matrix saved → reports/confusion_matrix_binary.png")
 # ─── STRATIFIED GROUP K-FOLD CV (subject_id as group) ───────────────────
 print("\nStratifiedGroupKFold CV (subject_id groups)...")
 
-# Synthetic rows in pipeline_v3 use subject_id <= 0; give them unique IDs so
+# Synthetic rows in pipeline use subject_id <= 0; give them unique IDs so
 # the splitter can distribute them across folds.
 groups_for_cv = df_train["subject_id"].values.astype(int).copy()
 synthetic_mask = groups_for_cv <= 0
