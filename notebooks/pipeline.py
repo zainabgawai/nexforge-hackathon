@@ -1,30 +1,3 @@
-"""
-pipeline_v3.py — Leakage-free data pipeline
-=============================================
-Key fix over v2:
-  THE TRAIN/TEST SPLIT NOW HAPPENS INSIDE THE PIPELINE, BEFORE AUGMENTATION.
-
-  v2 bug: ALL 70 real MIMIC rows were saved as both the test set AND as the
-  source for augmentation. Adding 7% noise to a row and putting it in the
-  training set while the original is in the test set is leakage — the model
-  memorises every test patient with slightly different numbers → F1=1.0 (fake).
-
-  v3 fix:
-    - Split real MIMIC rows 80/20 by subject_id (subject-isolated, stratified)
-    - 80% (df_train_real) → augment → add ESI-5 synthetic → balance → train CSV
-    - 20% (df_test_real)  → saved as-is, never touched again → test CSV
-    - PCA is fit ONLY on df_train_real embeddings to prevent test-set leakage
-      into the embedding space as well
-    - Synthetic ESI-5 rows get unique negative subject_ids so CV grouping works
-
-  Other fixes carried over from v2:
-    - Removed shock_index, has_sepsis, has_resp_failure
-    - Sentence-embeddings → PCA(8) for chief complaint
-    - Realistic ESI-5 synthetic patients
-
-Run: python pipeline_v3.py
-"""
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -84,7 +57,7 @@ adm['age']      = ((adm['admittime'] - adm['dob']).dt.days / 365).clip(0, 100).f
 adm['gender_m'] = (adm['gender'] == 'M').astype(int)
 adm['los_hours']= ((adm['dischtime'] - adm['admittime']).dt.total_seconds() / 3600).round(2)
 
-# ── 4. COMORBIDITIES (pre-existing only — no sepsis/resp_failure) ──
+# ── 4. COMORBIDITIES (pre-existing only) ──
 def flag_comorbidities(df):
     codes = df.groupby('hadm_id')['icd9_code'].apply(set)
     r = pd.DataFrame(index=codes.index)
@@ -169,7 +142,6 @@ print(f"\nFull real MIMIC dataset: {df.shape}")
 print(df['esi_level'].value_counts().sort_index())
 
 # ── 8. SUBJECT-ISOLATED TRAIN / TEST SPLIT ────────────────
-# THIS IS THE CRITICAL FIX.
 # Split by subject_id so no patient appears in both train and test.
 # Stratify by esi_level so class distribution is preserved in both splits.
 # Augmentation happens AFTER this split — the test set is never touched again.
@@ -194,8 +166,6 @@ print(f"\nTest split  (real): {len(df_test_real)} rows, "
 print(df_test_real['esi_level'].value_counts().sort_index())
 
 # ── 9. EMBED COMPLAINT TEXT — FIT PCA ON TRAIN SPLIT ONLY ─
-# Fitting PCA on all rows (including test) would leak test distribution
-# into the feature space. Fit on train_real, transform both splits.
 print("\nEmbedding complaint text with sentence-transformers...")
 Path('models').mkdir(exist_ok=True)
 USE_EMBEDDINGS = False
@@ -239,12 +209,11 @@ except ImportError:
 df_train_real = df_train_real.drop(columns=['complaint_text'], errors='ignore')
 df_test_real  = df_test_real.drop(columns=['complaint_text'],  errors='ignore')
 
-# Move target to end
 for _df in [df_train_real, df_test_real]:
     cols = [c for c in _df.columns if c != 'esi_level'] + ['esi_level']
     _df  = _df[cols]
 
-# ── 10. SAVE TEST SET — NEVER TOUCHED AGAIN ───────────────
+# ── 10. SAVE TEST SET ───────────────
 df_test_real.to_csv(OUT / 'mimic-iii-real.csv', index=False)
 print(f"\nSaved test data  → mimic-iii-clinical-db/mimic-iii-real.csv  ({len(df_test_real)} rows)")
 
@@ -342,7 +311,6 @@ df_train = (pd.concat(balanced, ignore_index=True)
             .sample(frac=1, random_state=42)
             .reset_index(drop=True))
 
-# Move target to end
 cols = [c for c in df_train.columns if c != 'esi_level'] + ['esi_level']
 df_train = df_train[cols]
 
@@ -351,10 +319,4 @@ print(df_train['esi_level'].value_counts().sort_index())
 
 df_train.to_csv(OUT / 'mimic-iii-train.csv', index=False)
 print(f"Saved training data → mimic-iii-clinical-db/mimic-iii-train.csv ({len(df_train)} rows)")
-print("\nPipeline complete. Run train_model_v5.py next.")
-
-print("Total admissions:", len(admissions))
-print("Total chart events:", len(chart))
-print("Vitals after filtering:", len(vitals))
-print("After merging vitals+admissions:", len(vitals_closest))
-print("After merging with adm:", len(df))
+print("\nPipeline complete. Train Model Next")
