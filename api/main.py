@@ -696,7 +696,7 @@ _seed_beds()
 # ─── App ────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="ER Triage System",
+    title="OptiSense Triage",
     description=(
         "Predicts ESI (Emergency Severity Index 1–5) at patient arrival using "
         "XGBoost + clinical override rules + Gemini LLM clinical reasoning."
